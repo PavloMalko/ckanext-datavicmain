@@ -1,4 +1,5 @@
-from typing import Union, cast
+import logging
+from typing import Union
 
 from flask import Blueprint
 
@@ -29,6 +30,8 @@ datavic_dataset = Blueprint(
 WITHOUT_RES = "save-without-resource"
 WITH_RES = "add-resources"
 
+log = logging.getLogger(__name__)
+
 
 class DatavicCreateView(CreateView):
     def post(self, package_type: str) -> Union[Response, str]:
@@ -57,7 +60,9 @@ class DatavicCreateView(CreateView):
                     is_an_update = True
                     data_dict["id"] = data_dict["pkg_name"]
                     del data_dict["pkg_name"]
-                    data_dict["state"] = "draft" if save_as == WITH_RES else "active"
+                    data_dict["state"] = (
+                        "draft" if save_as == WITH_RES else "active"
+                    )
 
                     pkg_dict = tk.get_action("package_update")(
                         context, data_dict
@@ -89,10 +94,12 @@ class DatavicCreateView(CreateView):
             # )
             if ckan_phase:
                 if save_as == WITH_RES:
-                    return tk.h.redirect_to(tk.h.url_for(
-                        u'{}_resource.new'.format(package_type),
-                        id=pkg_dict[u'name']
-                    ))
+                    return tk.h.redirect_to(
+                        tk.h.url_for(
+                            "{}_resource.new".format(package_type),
+                            id=pkg_dict["name"],
+                        )
+                    )
 
                 # tk.get_action("package_update")(
                 #     cast(Context, dict(context, allow_state_change=True)),
@@ -136,8 +143,57 @@ class DatavicCreateView(CreateView):
             return self.get(package_type, data_dict, errors, error_summary)
 
 
+def delwp_request_data(package_type: str, package_id: str):
+    try:
+        pkg_dict = tk.get_action("package_show")({}, {"id": package_id})
+    except (tk.ObjectNotFound, tk.NotAuthorized) as e:
+        tk.abort(403)
+
+    data_dict = dict(tk.request.form)
+    data_dict.update(
+        {
+            "package_id": pkg_dict["name"],
+            "contact_email": pkg_dict.get(
+                "maintainer_email", "data.vic@salsadigital.com.au"
+            ),
+        }
+    )
+
+    try:
+        result = tk.get_action("send_delwp_data_request")({}, data_dict)
+    except tk.ValidationError as e:
+        tk.h.flash_error("Please correct all errors in the request form.")
+
+        return tk.render(
+            "package/read.html",
+            extra_vars={
+                "data": data_dict,
+                "errors": e.error_dict,
+                "pkg_dict": pkg_dict,
+            },
+        )
+
+    tk.h.flash_success(
+        tk._("Your data request has been sent.")
+        if result["success"]
+        else tk._(
+            "An error occurred while sending the email. Contact the"
+            " administrator."
+        )
+    )
+
+    return tk.h.redirect_to(
+        "dataset.read", id=package_id, package_type=package_type
+    )
+
+
 def register_datavicmain_plugin_rules(blueprint):
     blueprint.add_url_rule("/new", view_func=DatavicCreateView.as_view("new"))
+    blueprint.add_url_rule(
+        "/<package_id>/delwp_request_data",
+        view_func=delwp_request_data,
+        methods=("POST",),
+    )
 
 
 register_datavicmain_plugin_rules(datavic_dataset)

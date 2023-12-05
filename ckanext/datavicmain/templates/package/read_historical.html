@@ -2,12 +2,6 @@
 
 {% block primary_content_inner %}
   {% block package_resources %}
-    {% set grouped_resources = h.group_resources_by_temporal_range(pkg_dict.resources) %}
-
-    {% if grouped_resources | length > 1 %}
-        {% snippet "package/snippets/resources_list.html", pkg=pkg_dict, resources=h.ungroup_temporal_resources(grouped_resources[1:]), historical=true %}
-    {% else %}
-        {% snippet "package/snippets/resources_list.html", pkg=pkg_dict, resources=pkg_dict.resources %}
-    {% endif %}
+        {% snippet "package/snippets/resources_list.html", pkg=pkg, resources=pkg.resources, historical=true %}
   {% endblock %}
 {% endblock %}

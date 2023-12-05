@@ -1,6 +1,9 @@
 {% ckan_extends %}
 
 {# Note: The parent template has aliased c.pkg_dict as pkg #}
+{% set delwp_dataset = h.vic_iar_is_delwp_dataset(pkg_dict) %}
+
+{% block wrapper_class %} {% if delwp_dataset %}via-iar-delwp-dataset{% endif %}{% endblock %}
 
 {% block package_description %}
     {% if g.debug %}
@@ -24,20 +27,47 @@
 {% endblock %}
 
 {% block package_resources %}
-  {% set grouped_resources = h.group_resources_by_temporal_range(pkg.resources) %}
+    {% set delwp_dataset = h.vic_iar_is_delwp_dataset(pkg) %}
+    {% set delwp_restricted = h.vic_iar_is_delwp_dataset_restricted(pkg) %}
+    {% set vector_data = h.vic_iar_is_delwp_vector_data(pkg.resources) %}
+    {% set raster_data = h.vic_iar_is_delwp_raster_data(pkg.resources) %}
 
-  {% if grouped_resources | length > 1 %}
-      {% snippet "package/snippets/resources_list.html", pkg=pkg, resources=grouped_resources[0] %}
-  {% else %}
-      {% snippet "package/snippets/resources_list.html", pkg=pkg, resources=pkg.resources %}
-  {% endif %}
+    {% if delwp_dataset and delwp_restricted and (vector_data or raster_data) %}
+        {% snippet "package/snippets/delwp_resources_list.html", pkg=pkg, with_button=not raster_data %}
+    {% else %}
+        {% set grouped_resources = h.group_resources_by_temporal_range(pkg.resources) %}
 
-  {% asset 'ckanext-datavicmain/datavicmain-resource-list-js' %}
-  {% asset 'ckanext-datavicmain/datavicmain-resource-list-css' %}
+        {% if grouped_resources | length > 1 %}
+            {% snippet "package/snippets/resources_list.html", pkg=pkg, resources=grouped_resources[0] %}
+        {% else %}
+            {% snippet "package/snippets/resources_list.html", pkg=pkg, resources=pkg.resources %}
+        {% endif %}
+    {% endif %}
 
-  {% snippet "package/snippets/datavic_dtv.html", pkg=pkg %}
+    {% if delwp_dataset and delwp_restricted and (vector_data or raster_data) %}
+        <section class="delwp-access-notes">
+            <h2>{{ _("Access Notes") }}</h2>
+
+            {% if vector_data %}
+                <p>Access to this dataset is provided by the Department of Energy, Environment and Climate Action (DEECA). Use the form below to make your request to DEECA. The data custodian will respond to your request by email, and provide the necessary instructions to access this dataset.</p>
+            {% endif %}
+
+            {% if not vector_data and raster_data %}
+                <p>Access to this dataset is provided through Data Service Providers, please see this page for an up to date list of suppliers - <a href="https://www.land.vic.gov.au/maps-and-spatial/spatial-data/how-to-access-spatial-data" target="_blank">Accessing spatial data</a>. For more information you can contact the <a href="mailto:coordinated.imagery@delwp.vic.gov.au">Coordinated Imagery Program</a>.</p>
+            {% endif %}
+        </section>
+    {% endif %}
+
+    {% asset 'ckanext-datavicmain/datavicmain-resource-list-js' %}
+    {% asset 'ckanext-datavicmain/datavicmain-resource-list-css' %}
+
+    {% snippet "package/snippets/datavic_dtv.html", pkg=pkg %}
 {% endblock %}
 
-  {% block package_additional_info %}
-    {% snippet "package/snippets/additional_info.html", pkg_dict=pkg %}
-  {% endblock %}
+{% block primary_content_inner %}
+    {{ super() }}
+
+    {% if h.vic_iar_is_delwp_dataset(pkg) and h.vic_iar_is_delwp_dataset_restricted(pkg) and h.vic_iar_is_delwp_vector_data(pkg.resources) %}
+        {% snippet "package/snippets/data_request_form.html", pkg=pkg, data=data or {}, errors=errors or {} %}
+    {% endif %}
+{% endblock %}

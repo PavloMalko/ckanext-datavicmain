@@ -62,6 +62,7 @@ def release_date(pkg_dict):
 @toolkit.blanket.auth_functions
 @toolkit.blanket.actions
 @toolkit.blanket.validators
+@toolkit.blanket.config_declarations
 class DatasetForm(p.SingletonPlugin, toolkit.DefaultDatasetForm):
     ''' A plugin that provides some metadata fields and
     overrides the default dataset form
@@ -271,7 +272,7 @@ class DatasetForm(p.SingletonPlugin, toolkit.DefaultDatasetForm):
 
     # IPackageController
 
-    def after_create(self, context, pkg_dict):
+    def after_dataset_create(self, context, pkg_dict):
         # Only add packages to groups when being created via the CKAN UI
         # (i.e. not during harvesting)
         if repr(toolkit.request) != '<LocalProxy unbound>' \
@@ -287,7 +288,7 @@ class DatasetForm(p.SingletonPlugin, toolkit.DefaultDatasetForm):
                 helpers.set_private_activity(pkg_dict, context, str('new'))
         pass
 
-    def after_update(self, context, pkg_dict):
+    def after_dataset_update(self, context, pkg_dict):
         # Only add packages to groups when being updated via the CKAN UI
         # (i.e. not during harvesting)
         if repr(toolkit.request) != '<LocalProxy unbound>' \
@@ -298,12 +299,42 @@ class DatasetForm(p.SingletonPlugin, toolkit.DefaultDatasetForm):
                 helpers.set_private_activity(pkg_dict, context, str('changed'))
 
     def before_dataset_index(self, pkg_dict: dict[str, Any]) -> dict[str, Any]:
-        if pkg_dict.get('res_format'):
-            pkg_dict['res_format'] = [
-                format.upper().split('.')[-1] for format in pkg_dict['res_format']
+        if pkg_dict.get("res_format"):
+            pkg_dict["res_format"] = [
+                res_format.upper().split(".")[-1]
+                for res_format in pkg_dict["res_format"]
             ]
+
+        if pkg_dict.get("res_format") and self._is_all_api_format(pkg_dict):
+            pkg_dict.get("res_format").append("ALL_API")
         return pkg_dict
 
+    def _is_all_api_format(self, pkg_dict: dict[str, Any]) -> bool:
+        """Check if the dataset contains a resource in a format recognized as an API.
+        This involves determining if the format of the resource is CSV and if this resource exists in the datastore
+        or matches a format inside a predefined list.
+        """
+        for resource in toolkit.get_action("package_show")({"ignore_auth": True}, {"id": pkg_dict["id"]}).get(
+                "resources", []):
+            if resource["format"].upper() == "CSV" and resource["datastore_active"]:
+                return True
+
+        if [
+            res_format
+            for res_format in pkg_dict["res_format"]
+            if res_format
+            in [
+                "WMS",
+                "WFS",
+                "API",
+                "ARCGIS GEOSERVICES REST API",
+                "ESRI REST",
+                "GEOJSON",
+            ]
+        ]:
+            return True
+        return False
+    
     # IClick
     def get_commands(self):
         return cli.get_commands()

@@ -1,6 +1,7 @@
 {% set dtv_resources = h.get_digital_twin_resources(pkg.id)|map(attribute="id")|list %}
+{% set dtv_preview = pkg.enable_dtv %}
 
-{% if dtv_resources and request.args.no_preview != "1" %}
+{% if dtv_resources and dtv_preview %}
     <section class="datapreview resource-preview">
         <div class="header-container">
             <h3>{{ _('Map preview') }}</h3>

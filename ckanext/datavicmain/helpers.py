@@ -18,6 +18,7 @@ import ckan.plugins.toolkit as toolkit
 import ckan.lib.mailer as mailer
 
 from ckanext.harvest.model import HarvestObject
+from ckanext.activity.model.activity import Activity
 from . import utils
 
 config = toolkit.config
@@ -110,7 +111,7 @@ def set_private_activity(pkg_dict, context, activity_type):
     else:
         user_id = str('not logged in')
 
-    activity = pkg.activity_stream_item(activity_type, user_id)
+    activity = Activity.activity_stream_item(pkg, activity_type, user_id)
     session.add(activity)
     return pkg_dict
 

@@ -140,6 +140,19 @@ dataset_fields:
   display_group: General
   form_snippet: text.html
 
+- field_name: enable_dtv
+  label: Enable Digital Twin Preview
+  display_snippet: null
+  required: true
+  preset: select
+  choices:
+    - value: true
+      label: "Yes"
+    - value: false
+      label: "No"
+  validators: boolean_validator
+  output_validators: boolean_validator
+
   # Security fields
 
 - field_name: personal_information
@@ -316,12 +329,14 @@ dataset_fields:
   form_snippet: public_release.html # custom select_workflow
   display_group: Workflow
 
+
 - field_name: workflow_status
   label: Workflow Status
   form_snippet: workflow_status.html # custom select_workflow
   display_group: Workflow
   validators: not_empty
   required: true
+
 
 - field_name: workflow_status_notes
   label: Workflow Status Notes
@@ -342,7 +357,7 @@ dataset_fields:
 
 - field_name: maintainer_email
   label: Email
-  form_placeholder: email
+  form_placeholder: data.vic@salsadigital.com.au
   validators: ignore_missing email_validator
   display_group: Custodian
   form_snippet: vic_custodian_autofill.html

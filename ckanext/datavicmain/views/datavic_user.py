@@ -1,6 +1,5 @@
 import logging
 import six
-import ckan.lib.mailer as mailer
 import ckan.plugins.toolkit as toolkit
 import ckan.logic as logic
 import ckan.model as model
@@ -17,6 +16,8 @@ from flask.views import MethodView
 from ckan.common import _, g, config, request
 from ckan import authz
 
+from ckanext.mailcraft.utils import get_mailer
+from ckanext.mailcraft.exception import MailerException
 
 NotFound = toolkit.ObjectNotFound
 NotAuthorized = toolkit.NotAuthorized
@@ -35,7 +36,6 @@ tuplize_dict = logic.tuplize_dict
 parse_params = logic.parse_params
 clean_dict = logic.clean_dict
 
-_edit_form_to_db_schema = user._edit_form_to_db_schema
 _extra_template_variables = user._extra_template_variables
 edit_user_form = user.edit_user_form
 set_repoze_user = user.set_repoze_user
@@ -45,7 +45,7 @@ _new_user_form = user.new_user_form
 log = logging.getLogger(__name__)
 
 datavicuser = Blueprint('datavicuser', __name__)
-
+mailer = get_mailer()
 
 class DataVicRequestResetView(user.RequestResetView):
 
@@ -102,7 +102,7 @@ class DataVicRequestResetView(user.RequestResetView):
                     return h.redirect_to(u'/user/reset')
                 else:
                     mailer.send_reset_link(user_obj)
-            except mailer.MailerException as e:
+            except MailerException as e:
                 h.flash_error(
                     _(u'Error sending the email. Try again later '
                         'or contact an administrator for help')
@@ -196,14 +196,19 @@ class DataVicUserEditView(user.EditView):
 
     def post(self, id=None):
         context, id = self._prepare(id)
+
         if not context[u'save']:
             return self.get(id)
 
-        if id in (g.userobj.id, g.userobj.name):
-            current_user = True
-        else:
-            current_user = False
-        old_username = g.userobj.name
+        current_user = id in (
+            (
+                ""
+                if toolkit.current_user.is_anonymous
+                else toolkit.current_user.id
+            ),
+            toolkit.current_user.name,
+        )
+        old_username = toolkit.current_user.name
 
         try:
             data_dict = clean_dict(
@@ -220,22 +225,29 @@ class DataVicUserEditView(user.EditView):
 
         context[u'message'] = data_dict.get(u'log_message', u'')
         data_dict[u'id'] = id
-        email_changed = data_dict[u'email'] != g.userobj.email
+        email_changed = data_dict[u'email'] != toolkit.current_user.email
 
         if (data_dict[u'password1']
                 and data_dict[u'password2']) or email_changed:
-            identity = {
-                u'login': g.user,
-                u'password': data_dict[u'old_password']
-            }
-            auth_user = authenticator.ckan_authenticator(identity)
-            auth_username = auth_user.name if auth_user else ''
-            if auth_username != toolkit.current_user.name:
-                errors = {
-                    u'oldpassword': [_(u'Password entered was incorrect')]
+
+            # CUSTOM CODE to allow updating user pass for sysadmin without a sys pass
+            self_update = data_dict["name"] == toolkit.current_user.name
+            is_sysadmin = False if toolkit.current_user.is_anonymous else toolkit.current_user.sysadmin  # type: ignore
+
+            if not is_sysadmin or self_update:
+                identity = {
+                    u'login': toolkit.current_user.name,
+                    u'password': data_dict[u'old_password']
                 }
-                error_summary = {_(u'Old Password'): _(u'incorrect password')}
-                return self.get(id, data_dict, errors, error_summary)
+                auth_user = authenticator.ckan_authenticator(identity)
+                auth_username = auth_user.name if auth_user else ''
+
+                if auth_username != toolkit.current_user.name:
+                    errors = {
+                        u'oldpassword': [_(u'Password entered was incorrect')]
+                    }
+                    error_summary = {_(u'Old Password'): _(u'incorrect password')}
+                    return self.get(id, data_dict, errors, error_summary)
 
         try:
             user = get_action(u'user_update')(context, data_dict)

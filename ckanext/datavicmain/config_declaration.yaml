@@ -1,0 +1,10 @@
+version: 1
+groups:
+  - annotation: ckanext-datavicmain
+    options:
+      - key: ckan.pages.show_blog_button
+        type: bool
+        default: True
+
+      - key: ckan.pages.base_url
+        default: pages
